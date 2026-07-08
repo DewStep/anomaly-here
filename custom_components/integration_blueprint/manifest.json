@@ -1,12 +1,12 @@
 {
-  "domain": "integration_blueprint",
-  "name": "Integration blueprint",
+  "domain": "anomaly_here",
+  "name": "Anomaly Here",
   "codeowners": [
-    "@ludeeus"
+    "@DewStep"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/ludeeus/integration_blueprint",
+  "documentation": "https://github.com/DewStep/anomaly-here",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
+  "issue_tracker": "https://github.com/DewStep/anomaly-here/issues",
   "version": "0.1.0"
 }
