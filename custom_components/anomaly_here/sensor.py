@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from homeassistant.components.persistent_notification import create
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
-from homeassistant.core import Event, EventStateChangedData
-from homeassistant.helpers.event import (
-    async_call_later,
-    async_track_state_change_event,
-)
 
 from .entity import AnomalyHereEntity
 
@@ -30,8 +23,6 @@ ENTITY_DESCRIPTIONS = (
     ),
 )
 
-CONF_TARGET_SENSOR = "target_sensor"
-
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
@@ -46,32 +37,6 @@ async def async_setup_entry(
         )
         for entity_description in ENTITY_DESCRIPTIONS
     )
-
-
-def setup_platform(hass, config, discovery_info=None):
-    sensor = AnomalyDetector(hass, target_sensor=config.get(CONF_TARGET_SENSOR, []))
-
-
-class AnomalyDetector:
-    def __init__(self, hass, target_sensor) -> None:
-        self.hass = hass
-        self.sensors = target_sensor
-
-    async def activity_noticed(self, event: Event[EventStateChangedData]) -> None:
-        self.restart_check()
-        # change this once the code to figure it out is written
-        self.restart_check = async_call_later(
-            self.hass, timedelta(minutes=5), self.alert_call
-        )
-
-    async def async_added_to_hass(self) -> None:
-        async_track_state_change_event(self.hass, self.sensors, self.activity_noticed)
-        self.restart_check = async_call_later(
-            self.hass, timedelta(minutes=5), self.alert_call
-        )
-
-    async def alert_call(self, _now) -> None:
-        create(self.hass, "Inactivity detected")
 
 
 class AnomalyHereSensor(AnomalyHereEntity, SensorEntity):
