@@ -77,7 +77,7 @@ async def async_setup_entry(
     # adds the delay of how long they stay active.
     # It's ones where I know how long they stay active after detection
     # ADD MORE FUTURE ME
-    known_sensors = {"occupancy": [50], "door": [0]}
+    known_sensors = {"test": [0, ["test_door_sensor"]], "occupancy": [50], "door": [0]}
     for entity in entity_list:
         if entity == "occupancy":
             known_sensors["occupancy"].append(entity_list[entity])
