@@ -72,12 +72,16 @@ async def async_setup_entry(
             if device_class in entity_list:
                 entity_list[device_class].append(entity.entity_id)
             else:
-                entity_list[device_class] = entity.entity_id
+                entity_list[device_class] = [entity.entity_id]
     # Filters through only certain sensor types,
     # adds the delay of how long they stay active.
     # It's ones where I know how long they stay active after detection
     # ADD MORE FUTURE ME
-    known_sensors = {"test": [0, ["test_door_sensor"]], "occupancy": [50], "door": [0]}
+    known_sensors = {
+        "test": [0, ["binary_sensor.test_door_sensor"]],
+        "occupancy": [50],
+        "door": [0],
+    }
     for entity in entity_list:
         if entity == "occupancy":
             known_sensors["occupancy"].append(entity_list[entity])
@@ -130,16 +134,21 @@ class AnomalyDetector:
 
     async def async_setup(self) -> None:
         self.EndList = []
+        create(self.hass, ("Test call. Setup started."))
         for type in self.sensors:
-            for entity in self.sensors[type][1]:
-                EndListener = async_track_state_change_event(
-                    self.hass, entity, self.activity_noticed
-                )
-                create(self.hass, ("Test call. Listener Created for " + entity))
-                self.EndList.append(EndListener)
+            try:
+                for entity in self.sensors[type][1]:
+                    EndListener = async_track_state_change_event(
+                        self.hass, entity, self.activity_noticed
+                    )
+                    create(self.hass, ("Test call. Listener Created for " + entity))
+                    self.EndList.append(EndListener)
+            except:
+                create(self.hass, ("Test call. No listeners created for " + type))
         self.restart_check = async_call_later(
             self.hass, timedelta(minutes=5), self.alert_call
         )
+        create(self.hass, ("Test call. All listeners created"))
 
     async def alert_call(self, _now) -> None:
         create(self.hass, "Inactivity detected")

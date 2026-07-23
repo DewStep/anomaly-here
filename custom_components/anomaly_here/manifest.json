@@ -4,6 +4,9 @@
   "codeowners": [
     "@DewStep"
   ],
+  "dependencies": [
+    "zha"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/DewStep/anomaly-here",
   "iot_class": "cloud_polling",
