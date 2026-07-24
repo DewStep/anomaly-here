@@ -7,12 +7,11 @@ https://github.com/DewStep/anomaly-here
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.components.persistent_notification import create
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.core import Event, EventStateChangedData
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
@@ -27,7 +26,7 @@ from .coordinator import AnomalyHereDataUpdateCoordinator
 from .data import AnomalyHereData
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Event, EventStateChangedData, HomeAssistant
 
     from .data import AnomalyHereConfigEntry
 
@@ -82,16 +81,12 @@ async def async_setup_entry(
         "occupancy": [50],
         "door": [0],
     }
-    for entity in entity_list:
-        if entity == "occupancy":
-            known_sensors["occupancy"].append(entity_list[entity])
-        elif entity == "door":
-            known_sensors["door"].append(entity_list[entity])
-
-    Detector = AnomalyDetector(hass, known_sensors)
-    await Detector.async_setup()
+    for entity_type, entities in entity_list.items():
+        known_sensors[entity_type].append(entities)
+    detector = AnomalyDetector(hass, known_sensors)
+    await detector.async_setup()
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = Detector
+    hass.data[DOMAIN][entry.entry_id] = detector
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
@@ -107,8 +102,8 @@ async def async_unload_entry(
     entry: AnomalyHereConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
-    Detector = hass.data[DOMAIN][entry.entry_id]
-    await Detector.async_shutdown()
+    detector = hass.data[DOMAIN][entry.entry_id]
+    await detector.async_shutdown()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
@@ -121,11 +116,46 @@ async def async_reload_entry(
 
 
 class AnomalyDetector:
-    def __init__(self, hass, target_sensor) -> None:
+    """
+    A collection of listeners for binary sensors.
+
+    Attributes
+    ----------
+    hass : HomeAssistant
+        The Home Assistant instance.
+    sensors : dict
+        A dictionary of lists of binary sensors of a given type.
+
+    Methods
+    -------
+    activity_noticed(event: Event[EventStateChangedData]) -> None
+        Called when a binary sensor changes state. Restarts the inactivity timer.
+    async_setup() -> None
+        Creates an async event state change listener
+        for all binary sensors in self.sensors.
+    alert_call(_now) -> None
+        Called when the inactivity delay passes without being restarted.
+        Creates a persistent notification in Home Assistant.
+    async_shutdown() -> None
+        removes all listeners and cancels the timer
+
+    """
+
+    def __init__(self, hass: HomeAssistant, target_sensor: dict) -> None:
+        """Initialise AnomalyDetector with Home Assistant and binary sensors."""
         self.hass = hass
         self.sensors = target_sensor
 
-    async def activity_noticed(self, event: Event[EventStateChangedData]) -> None:
+    async def activity_noticed(self, _event: Event[EventStateChangedData]) -> None:
+        """
+        Restart inactivity timer.
+
+        Parameters
+        ----------
+        event : Event[EventStateChangedData]
+            The event that triggered the callback.
+
+        """
         self.restart_check()
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
@@ -133,27 +163,32 @@ class AnomalyDetector:
         )
 
     async def async_setup(self) -> None:
+        """Create listeners for all binary sensors in self.sensors."""
         self.EndList = []
         create(self.hass, ("Test call. Setup started."))
-        for type in self.sensors:
+        for entity_class in self.sensors:
             try:
-                for entity in self.sensors[type][1]:
-                    EndListener = async_track_state_change_event(
+                for entity in self.sensors[entity_class][1]:
+                    end_listener = async_track_state_change_event(
                         self.hass, entity, self.activity_noticed
                     )
                     create(self.hass, ("Test call. Listener Created for " + entity))
-                    self.EndList.append(EndListener)
-            except:
-                create(self.hass, ("Test call. No listeners created for " + type))
+                    self.EndList.append(end_listener)
+            except IndexError:
+                create(
+                    self.hass, ("Test call. No listeners created for " + entity_class)
+                )
         self.restart_check = async_call_later(
             self.hass, timedelta(minutes=5), self.alert_call
         )
         create(self.hass, ("Test call. All listeners created"))
 
-    async def alert_call(self, _now) -> None:
+    async def alert_call(self, _now: datetime) -> None:
+        """Send a persistent notification to Home Assistant."""
         create(self.hass, "Inactivity detected")
 
     async def async_shutdown(self) -> None:
+        """Remove all listeners and timer so that the integration can be unloaded."""
         for listener in self.EndList:
             listener()  # Call the listener to remove it
         self.restart_check()  # Cancel the scheduled alert call
