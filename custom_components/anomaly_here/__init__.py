@@ -155,6 +155,7 @@ class AnomalyDetector:
         self.activity_log.execute(
             "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
         )
+        create(self.hass, ("Test call. Database created."))
 
     async def activity_noticed(self, _event: Event[EventStateChangedData]) -> None:
         """
@@ -167,17 +168,13 @@ class AnomalyDetector:
 
         """
         self.restart_check()
-        self.activity_log.execute(
-            "INSERT INTO activity VALUES (str(datetime.time.now()), _event)"
-        )
         create(
             self.hass,
-            (
-                "Test call. Event noticed: "
-                + str(_event)
-                + str(type(_event))
-                + str(datetime.time.now())
-            ),
+            ("Test call. Event noticed: " + str(_event) + str(type(_event))),
+        )
+        create(self.hass, ("Test call. Current time: " + str(datetime.time.now())))
+        self.activity_log.execute(
+            "INSERT INTO activity VALUES (str(datetime.time.now()), _event)"
         )
         current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
         create(self.hass, (str(current_db)))
