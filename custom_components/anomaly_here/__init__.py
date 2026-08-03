@@ -7,6 +7,7 @@ https://github.com/DewStep/anomaly-here
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -59,8 +60,6 @@ async def async_setup_entry(
         coordinator=coordinator,
     )
 
-    # Apparently ZHA creates sensors with unique IDs,
-    # which is needed for the entity registry to find it.
     entity_registry = er.async_get(hass)
     # creates a dictionary with device classes as the keys and
     # entity IDs as the values.
@@ -128,9 +127,11 @@ class AnomalyDetector:
 
     Methods
     -------
+    async_setup() -> None
+        Setup the AnomalyDetector and creates a database of events
     activity_noticed(event: Event[EventStateChangedData]) -> None
         Called when a binary sensor changes state. Restarts the inactivity timer.
-    async_setup() -> None
+    create_listeners() -> None
         Creates an async event state change listener
         for all binary sensors in self.sensors.
     alert_call(_now) -> None
@@ -146,6 +147,14 @@ class AnomalyDetector:
         self.hass = hass
         self.sensors = target_sensor
 
+    async def async_setup(self) -> None:
+        """Set up the AnomalyDetector and database."""
+        await self.create_listeners()
+        self.activity_log = sqlite3.connect("activity_log.db", isolation_level=None)
+        self.activity_log.execute(
+            "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
+        )
+
     async def activity_noticed(self, _event: Event[EventStateChangedData]) -> None:
         """
         Restart inactivity timer.
@@ -157,12 +166,26 @@ class AnomalyDetector:
 
         """
         self.restart_check()
+        self.activity_log.execute(
+            "INSERT INTO activity VALUES (str(datetime.time.now()), _event)"
+        )
+        create(
+            self.hass,
+            (
+                "Test call. Event noticed: "
+                + str(_event)
+                + str(type(_event))
+                + str(datetime.time.now())
+            ),
+        )
+        current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
+        create(self.hass, (str(current_db)))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, timedelta(minutes=5), self.alert_call
         )
 
-    async def async_setup(self) -> None:
+    async def create_listeners(self) -> None:
         """Create listeners for all binary sensors in self.sensors."""
         self.EndList = []
         create(self.hass, ("Test call. Setup started."))
