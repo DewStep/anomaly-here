@@ -81,7 +81,8 @@ async def async_setup_entry(
         "door": [0],
     }
     for entity_type, entities in entity_list.items():
-        known_sensors[entity_type].append(entities)
+        if entity_type in known_sensors:
+            known_sensors[entity_type].append(entities)
     detector = AnomalyDetector(hass, known_sensors)
     await detector.async_setup()
     hass.data.setdefault(DOMAIN, {})
