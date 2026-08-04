@@ -8,6 +8,7 @@ https://github.com/DewStep/anomaly-here
 from __future__ import annotations
 
 import datetime
+import inspect
 import sqlite3
 from typing import TYPE_CHECKING
 
@@ -154,6 +155,7 @@ class AnomalyDetector:
         self.activity_log.execute(
             "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
         )
+        self.activity_log.execute("DELETE FROM activity WHERE 1")
         create(self.hass, ("Test call. Database created."))
 
     async def activity_noticed(self, _event: Event[EventStateChangedData]) -> None:
@@ -167,13 +169,17 @@ class AnomalyDetector:
 
         """
         self.restart_check()
+        event_data = inspect.getmembers(_event, lambda a: not (inspect.isroutine(a)))
+        cleaned_event_data = [
+            a for a in event_data if not (a[0].startswith("__") and a[0].endswith("__"))
+        ]
         create(
             self.hass,
-            ("Test call. Event noticed: " + str(_event)),
+            ("Test call. Event noticed: " + str(cleaned_event_data)),
         )
         create(
             self.hass,
-            ("Test call. Event noticed P2: " + str(type(_event))),
+            ("Test call. Event noticed P2: " + str(type(cleaned_event_data))),
         )
         create(
             self.hass,
@@ -181,7 +187,7 @@ class AnomalyDetector:
         )
         self.activity_log.execute(
             "INSERT INTO activity VALUES (?, ?)",
-            [str(datetime.datetime.now(tz=datetime.UTC)), str(_event)],
+            [str(datetime.datetime.now(tz=datetime.UTC)), str(cleaned_event_data)],
         )
         create(self.hass, ("Test call. Event logged to database."))
         current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
