@@ -179,6 +179,10 @@ class AnomalyDetector:
         )
         create(
             self.hass,
+            ("Test call. Event noticed: " + str(_event.data["entity_id"])),
+        )
+        create(
+            self.hass,
             ("Test call. Event noticed P2: " + str(type(cleaned_event_data))),
         )
         create(
