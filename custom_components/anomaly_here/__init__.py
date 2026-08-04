@@ -180,8 +180,10 @@ class AnomalyDetector:
             ("Test call. Current time: " + str(datetime.datetime.now(tz=datetime.UTC))),
         )
         self.activity_log.execute(
-            "INSERT INTO activity VALUES (str(datetime.datetime.now()), _event)"
+            "INSERT INTO activity VALUES (?, ?)",
+            [str(datetime.datetime.now(tz=datetime.UTC)), str(_event)],
         )
+        create(self.hass, ("Test call. Event logged to database."))
         current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
         create(self.hass, (str(current_db)))
         # change this once the code to figure it out is written
