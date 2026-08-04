@@ -76,7 +76,6 @@ async def async_setup_entry(
     # It's ones where I know how long they stay active after detection
     # ADD MORE FUTURE ME
     known_sensors = {
-        "test": [0, ["binary_sensor.test_door_sensor"]],
         "occupancy": [50],
         "door": [0],
     }
@@ -170,14 +169,18 @@ class AnomalyDetector:
         self.restart_check()
         create(
             self.hass,
-            ("Test call. Event noticed: " + str(_event) + "     " + str(type(_event))),
+            ("Test call. Event noticed: " + str(_event)),
+        )
+        create(
+            self.hass,
+            ("Test call. Event noticed P2: " + str(type(_event))),
         )
         create(
             self.hass,
             ("Test call. Current time: " + str(datetime.datetime.now(tz=datetime.UTC))),
         )
         self.activity_log.execute(
-            "INSERT INTO activity VALUES (str(datetime.time.now()), _event)"
+            "INSERT INTO activity VALUES (str(datetime.datetime.now()), _event)"
         )
         current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
         create(self.hass, (str(current_db)))
