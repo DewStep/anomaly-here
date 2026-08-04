@@ -170,7 +170,7 @@ class AnomalyDetector:
         self.restart_check()
         create(
             self.hass,
-            ("Test call. Event noticed: " + str(_event) + str(type(_event))),
+            ("Test call. Event noticed: " + str(_event) + "     " + str(type(_event))),
         )
         create(
             self.hass,
