@@ -7,8 +7,8 @@ https://github.com/DewStep/anomaly-here
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.components.persistent_notification import create
@@ -48,7 +48,7 @@ async def async_setup_entry(
         hass=hass,
         logger=LOGGER,
         name=DOMAIN,
-        update_interval=timedelta(hours=1),
+        update_interval=datetime.timedelta(hours=1),
     )
     entry.runtime_data = AnomalyHereData(
         client=AnomalyHereApiClient(
@@ -172,7 +172,10 @@ class AnomalyDetector:
             self.hass,
             ("Test call. Event noticed: " + str(_event) + str(type(_event))),
         )
-        create(self.hass, ("Test call. Current time: " + str(datetime.time.now())))
+        create(
+            self.hass,
+            ("Test call. Current time: " + str(datetime.datetime.now(tz=datetime.UTC))),
+        )
         self.activity_log.execute(
             "INSERT INTO activity VALUES (str(datetime.time.now()), _event)"
         )
@@ -180,7 +183,7 @@ class AnomalyDetector:
         create(self.hass, (str(current_db)))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
-            self.hass, timedelta(minutes=5), self.alert_call
+            self.hass, datetime.timedelta(minutes=5), self.alert_call
         )
 
     async def create_listeners(self) -> None:
@@ -200,11 +203,11 @@ class AnomalyDetector:
                     self.hass, ("Test call. No listeners created for " + entity_class)
                 )
         self.restart_check = async_call_later(
-            self.hass, timedelta(minutes=5), self.alert_call
+            self.hass, datetime.timedelta(minutes=5), self.alert_call
         )
         create(self.hass, ("Test call. All listeners created"))
 
-    async def alert_call(self, _now: datetime) -> None:
+    async def alert_call(self, _now: datetime.datetime) -> None:
         """Send a persistent notification to Home Assistant."""
         create(self.hass, "Inactivity detected")
 
