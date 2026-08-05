@@ -8,6 +8,7 @@ https://github.com/DewStep/anomaly-here
 from __future__ import annotations
 
 import datetime
+import inspect
 import sqlite3
 from typing import TYPE_CHECKING
 
@@ -27,7 +28,7 @@ from .coordinator import AnomalyHereDataUpdateCoordinator
 from .data import AnomalyHereData
 
 if TYPE_CHECKING:
-    from homeassistant.core import Event, EventStateChangedData, HomeAssistant
+    from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State
 
     from .data import AnomalyHereConfigEntry
 
@@ -174,32 +175,23 @@ class AnomalyDetector:
         )
         create(
             self.hass,
-            (
-                "Test call. Event noticed, entity_id p2: "
-                + str(type(_event.data["entity_id"]))
-            ),
-        )
-        create(
-            self.hass,
-            ("Test call. Event noticed, old_state: " + str(_event.data["old_state"])),
-        )
-        create(
-            self.hass,
-            (
-                "Test call. Event noticed, old_state p2: "
-                + str(type(_event.data["old_state"]))
-            ),
-        )
-        create(
-            self.hass,
             ("Test call. Event noticed, new_state: " + str(_event.data["new_state"])),
         )
         create(
             self.hass,
             (
                 "Test call. Event noticed, new_state p2: "
-                + str(type(_event.data["new_state"]))
+                + str(_event.data["new_state"])
             ),
+        )
+        new_state = _event.data["new_state"]
+        attributes = inspect.getmembers(new_state, lambda a: not (inspect.isroutine(a)))
+        cleaned = [
+            a for a in attributes if not (a[0].startswith("__") and a[0].endswith("__"))
+        ]
+        create(
+            self.hass,
+            ("Test call. Event noticed, new_state: " + str(cleaned)),
         )
         create(
             self.hass,
@@ -209,9 +201,9 @@ class AnomalyDetector:
         #    "INSERT INTO activity VALUES (?, ?)",
         #    [str(datetime.datetime.now(tz=datetime.UTC)), str(cleaned_event_data)],
         # )
-        create(self.hass, ("Test call. Event logged to database."))
-        current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
-        create(self.hass, (str(current_db)))
+        # create(self.hass, ("Test call. Event logged to database."))
+        # current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
+        # create(self.hass, (str(current_db)))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
