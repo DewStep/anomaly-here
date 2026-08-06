@@ -8,7 +8,6 @@ https://github.com/DewStep/anomaly-here
 from __future__ import annotations
 
 import datetime
-import json
 import sqlite3
 from typing import TYPE_CHECKING
 
@@ -28,7 +27,7 @@ from .coordinator import AnomalyHereDataUpdateCoordinator
 from .data import AnomalyHereData
 
 if TYPE_CHECKING:
-    from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State
+    from homeassistant.core import Event, EventStateChangedData, HomeAssistant
 
     from .data import AnomalyHereConfigEntry
 
@@ -185,11 +184,12 @@ class AnomalyDetector:
             ),
         )
         new_state = _event.data["new_state"]
-        new_state = json.dumps(new_state)
-        create(
-            self.hass,
-            ("Test call. Event noticed, new_state json: " + str(new_state)),
-        )
+        if new_state is not None:
+            current_state = new_state.state
+            create(
+                self.hass,
+                ("Test call. Event noticed, new_state json: " + current_state),
+            )
         create(
             self.hass,
             ("Test call. Current time: " + str(datetime.datetime.now(tz=datetime.UTC))),
