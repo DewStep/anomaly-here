@@ -184,10 +184,11 @@ class AnomalyDetector:
                 + str(_event.data["new_state"])
             ),
         )
-        new_state = json.dumps(_event.data["new_state"])
+        new_state = _event.data["new_state"]
+        new_state = json.dumps(new_state)
         create(
             self.hass,
-            ("Test call. Event noticed, new_state json: " + new_state),
+            ("Test call. Event noticed, new_state json: " + str(new_state)),
         )
         create(
             self.hass,
