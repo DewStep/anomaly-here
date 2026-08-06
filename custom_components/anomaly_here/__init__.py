@@ -8,7 +8,7 @@ https://github.com/DewStep/anomaly-here
 from __future__ import annotations
 
 import datetime
-import inspect
+import json
 import sqlite3
 from typing import TYPE_CHECKING
 
@@ -184,14 +184,10 @@ class AnomalyDetector:
                 + str(_event.data["new_state"])
             ),
         )
-        new_state = _event.data["new_state"]
-        attributes = inspect.getmembers(new_state, lambda a: not (inspect.isroutine(a)))
-        cleaned = [
-            a for a in attributes if not (a[0].startswith("__") and a[0].endswith("__"))
-        ]
+        new_state = json.dumps(_event.data["new_state"])
         create(
             self.hass,
-            ("Test call. Event noticed, new_state: " + str(cleaned)),
+            ("Test call. Event noticed, new_state json: " + new_state),
         )
         create(
             self.hass,
