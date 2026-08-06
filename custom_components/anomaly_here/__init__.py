@@ -185,10 +185,24 @@ class AnomalyDetector:
         )
         new_state = _event.data["new_state"]
         if new_state is not None:
-            current_state = new_state.state
             create(
                 self.hass,
-                ("Test call. Event noticed, new_state json: " + current_state),
+                ("Test call. Event noticed, new state: " + new_state.state),
+            )
+            create(
+                self.hass,
+                ("Test call. Event noticed, domain: " + new_state.domain),
+            )
+            create(
+                self.hass,
+                ("Test call. Event noticed, attributes: " + str(new_state.attributes)),
+            )
+            create(
+                self.hass,
+                (
+                    "Test call. Event noticed, last change: "
+                    + str(new_state.last_changed)
+                ),
             )
         create(
             self.hass,
