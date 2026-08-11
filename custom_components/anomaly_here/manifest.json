@@ -11,5 +11,8 @@
   "documentation": "https://github.com/DewStep/anomaly-here",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/DewStep/anomaly-here/issues",
+  "requirements": [
+    "ruptures==1.1.9"
+  ],
   "version": "0.1.0"
 }
