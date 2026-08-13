@@ -11,16 +11,20 @@ import datetime
 import sqlite3
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from homeassistant.components.persistent_notification import create
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_call_later,
+    async_track_point_in_time,
     async_track_state_change_event,
+    async_track_time_interval,
 )
 from homeassistant.loader import async_get_loaded_integration
 
+from .analysis import run_merge
 from .api import AnomalyHereApiClient
 from .const import DOMAIN, LOGGER
 from .coordinator import AnomalyHereDataUpdateCoordinator
@@ -156,6 +160,23 @@ class AnomalyDetector:
         )
         self.activity_log.execute("DELETE FROM activity WHERE 1")
         create(self.hass, ("Test call. Database created."))
+        data = {"time": [], "sensor": [], "value": []}
+        self.events_full = pd.DataFrame(data)
+        current_date = str(datetime.datetime.now(tz=datetime.UTC).date())
+        evening_datetime = datetime.datetime(
+            int(current_date[:4]),
+            int(current_date[5:7]),
+            int(current_date[8:]),
+            17,
+            00,
+            00,
+            tzinfo=datetime.UTC,
+        )
+        self.analyse_start = async_track_point_in_time(
+            self.hass,
+            self.analysis_start,
+            evening_datetime,
+        )
 
     async def activity_noticed(self, _event: Event[EventStateChangedData]) -> None:
         """
@@ -168,53 +189,16 @@ class AnomalyDetector:
 
         """
         self.restart_check()
-        create(
-            self.hass,
-            ("Test call. Event noticed, entity_id: " + str(_event.data["entity_id"])),
-        )
-        create(
-            self.hass,
-            ("Test call. Event noticed, new_state: " + str(_event.data["new_state"])),
-        )
-        create(
-            self.hass,
-            (
-                "Test call. Event noticed, new_state p2: "
-                + str(_event.data["new_state"])
-            ),
-        )
         new_state = _event.data["new_state"]
         if new_state is not None:
-            create(
-                self.hass,
-                ("Test call. Event noticed, new state: " + new_state.state),
+            new_row = pd.DataFrame(
+                {
+                    "time": [pd.to_datetime(new_state.last_changed, errors="coerce")],
+                    "sensor": [_event.data["entity_id"]],
+                    "value": [new_state.state],
+                }
             )
-            create(
-                self.hass,
-                ("Test call. Event noticed, domain: " + new_state.domain),
-            )
-            create(
-                self.hass,
-                ("Test call. Event noticed, attributes: " + str(new_state.attributes)),
-            )
-            create(
-                self.hass,
-                (
-                    "Test call. Event noticed, last change: "
-                    + str(new_state.last_changed)
-                ),
-            )
-        create(
-            self.hass,
-            ("Test call. Current time: " + str(datetime.datetime.now(tz=datetime.UTC))),
-        )
-        # self.activity_log.execute(
-        #    "INSERT INTO activity VALUES (?, ?)",
-        #    [str(datetime.datetime.now(tz=datetime.UTC)), str(cleaned_event_data)],
-        # )
-        # create(self.hass, ("Test call. Event logged to database."))
-        # current_db = self.activity_log.execute("SELECT * FROM activity").fetchall()
-        # create(self.hass, (str(current_db)))
+            self.events_full = pd.concat([self.events_full, new_row], ignore_index=True)
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
@@ -241,6 +225,20 @@ class AnomalyDetector:
         )
         create(self.hass, ("Test call. All listeners created"))
 
+    async def analysis_start(self, _now: datetime.datetime):
+        self.event_analysis
+        self.daily_analysis = async_track_time_interval(
+            self.hass, self.event_analysis, datetime.timedelta(days=1)
+        )
+
+    async def event_analysis(self, _now: datetime.datetime):
+        thresholds = run_merge(self.events_full)
+        create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
+        # Test run
+        merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
+        for event in self.events_full:
+            create(self.hass, ("Test call. event number " + str(event)))
+
     async def alert_call(self, _now: datetime.datetime) -> None:
         """Send a persistent notification to Home Assistant."""
         create(self.hass, "Inactivity detected")
@@ -250,3 +248,5 @@ class AnomalyDetector:
         for listener in self.EndList:
             listener()  # Call the listener to remove it
         self.restart_check()  # Cancel the scheduled alert call
+        self.daily_analysis()  # Cancel the scheduled daily analysis
+        self.analyse_start()  # Cancel the scheduled analysis start
