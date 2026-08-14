@@ -18,6 +18,7 @@
     "narwhals>=2.24.0",
     "joblib>=1.5.3",
     "threadpoolctl>=3.6.0",
+    "ninja>=1.8.2",
     "meson-python>=0.20.0",
     "scikit-learn>=1.9.0"
   ],
