@@ -11,5 +11,14 @@
   "documentation": "https://github.com/DewStep/anomaly-here",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/DewStep/anomaly-here/issues",
+  "requirements": [
+    "scikit-learn==1.9.0",
+    "numpy==2.5.2",
+    "pandas==3.0.5",
+    "scipy==1.18.0",
+    "narwhals==2.24.0",
+    "joblib==1.5.3",
+    "threadpoolctl==3.6.0"
+  ],
   "version": "0.1.0"
 }
