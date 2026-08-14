@@ -13,7 +13,7 @@
   "issue_tracker": "https://github.com/DewStep/anomaly-here/issues",
   "requirements": [
     "numpy>=2.3.2",
-    "pandas>=2.33",
+    "pandas>=2.3.3",
     "scipy>=1.18.0",
     "narwhals>=2.24.0",
     "joblib>=1.5.3",
