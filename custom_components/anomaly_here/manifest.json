@@ -14,7 +14,7 @@
   "requirements": [
     "numpy>=2.3.2",
     "pandas>=2.3.3",
-    "scipy>=1.18.0",
+    "scipy>=1.18.0"
   ],
   "version": "0.1.0"
 }
