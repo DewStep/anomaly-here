@@ -15,12 +15,6 @@
     "numpy>=2.3.2",
     "pandas>=2.3.3",
     "scipy>=1.18.0",
-    "narwhals>=2.24.0",
-    "joblib>=1.5.3",
-    "threadpoolctl>=3.6.0",
-    "ninja>=1.13.0",
-    "meson-python>=0.20.0",
-    "scikit-learn>=1.9.0"
   ],
   "version": "0.1.0"
 }

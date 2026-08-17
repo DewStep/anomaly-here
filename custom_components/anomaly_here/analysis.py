@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from sklearn.mixture import GaussianMixture
+from scipy.cluster.vq import kmeans2
+from scipy.stats import norm
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -17,6 +18,7 @@ K_SENSITIVITY_MULTIPLIERS = [0.5, 1.0, 2.0]
 
 ON_VALUES = {"ON", "OPEN"}
 OFF_VALUES = {"OFF", "CLOSE"}
+_EPS = 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -105,19 +107,141 @@ def raw_gaps_seconds(activations):
 # ---------------------------------------------------------------------------
 # THRESHOLD ESTIMATION: mixture-fit, knee, stability
 # ---------------------------------------------------------------------------
-def mixture_fit_crossing(gaps_seconds):
+def _fit_gmm1(x):
+    """Closed-form fit of a single 1-D Gaussian.
 
+    Equivalent to ``GaussianMixture(n_components=1).fit``.
+
+    Returns
+    -------
+    mean, var, log_likelihood
+    """
+    mean = float(np.mean(x))
+    var = max(float(np.var(x)), _EPS)  # biased (MLE) variance
+    log_likelihood = float(np.sum(norm.logpdf(x, loc=mean, scale=np.sqrt(var))))
+    return mean, var, log_likelihood
+
+
+def _e_step(x, means, variances, weights):
+    """Compute responsibilities and total log-likelihood.
+
+    Uses the log-sum-exp trick for numerical stability.
+    """
+    n_components = len(means)
+    log_probs = np.empty((x.shape[0], n_components))
+    for k in range(n_components):
+        log_probs[:, k] = np.log(weights[k]) + norm.logpdf(
+            x[:, 0], loc=means[k], scale=np.sqrt(variances[k])
+        )
+    max_log_prob = np.max(log_probs, axis=1, keepdims=True)
+    log_norm = max_log_prob + np.log(
+        np.sum(np.exp(log_probs - max_log_prob), axis=1, keepdims=True)
+    )
+    responsibilities = np.exp(log_probs - log_norm)
+    log_likelihood = float(np.sum(log_norm))
+    return responsibilities, log_likelihood
+
+
+def _m_step(x, responsibilities):
+    """Update means, variances, and weights given responsibilities."""
+    n_samples = x.shape[0]
+    weight_sums = responsibilities.sum(axis=0)
+    weights = weight_sums / n_samples
+    means = (responsibilities * x).sum(axis=0) / weight_sums
+
+    variances = np.empty_like(means)
+    for k in range(len(means)):
+        diff = x[:, 0] - means[k]
+        variances[k] = np.sum(responsibilities[:, k] * diff**2) / weight_sums[k]
+        variances[k] = max(variances[k], _EPS)
+
+    return means, variances, weights
+
+
+def _init_params(x, n_components, random_state):
+    """Initialize means/variances/weights via k-means (mirrors
+    scikit-learn's default ``init_params="kmeans"``).
+    """
+    rng = np.random.RandomState(random_state)
+    rng = rng.randint(0, np.iinfo(np.int32).max)
+    centroids, labels = kmeans2(x, n_components, minit="++", rng=rng)
+
+    means = centroids[:, 0]
+    variances = np.empty(n_components)
+    weights = np.empty(n_components)
+    for k in range(n_components):
+        members = x[labels == k, 0]
+        weights[k] = max(len(members), 1)
+        variances[k] = np.var(members) if len(members) > 1 else np.var(x)
+        variances[k] = max(variances[k], _EPS)
+    weights = weights / weights.sum()
+
+    return means, variances, weights
+
+
+def _fit_gmm2(x, random_state=0, tol=1e-3, max_iter=100):
+    """Fit a 2-component 1-D Gaussian mixture via EM.
+
+    Equivalent to ``GaussianMixture(n_components=2).fit``.
+
+    Returns
+    -------
+    means, variances, weights, log_likelihood
+    """
+    means, variances, weights = _init_params(x, 2, random_state)
+    prev_log_likelihood = -np.inf
+
+    for _ in range(max_iter):
+        responsibilities, log_likelihood = _e_step(x, means, variances, weights)
+        means, variances, weights = _m_step(x, responsibilities)
+        if abs(log_likelihood - prev_log_likelihood) < tol:
+            break
+        prev_log_likelihood = log_likelihood
+
+    _, log_likelihood = _e_step(x, means, variances, weights)
+    return means, variances, weights, log_likelihood
+
+
+def _bic(log_likelihood, n_components, n_samples):
+    """Bayesian Information Criterion, matching
+    ``GaussianMixture.bic`` for ``covariance_type="full"`` on 1-D
+    data (``n_params = 3 * n_components - 1``).
+    """
+    n_params = 3 * n_components - 1
+    return -2.0 * log_likelihood + n_params * np.log(n_samples)
+
+
+def _predict_proba(scan, means, variances, weights):
+    """Posterior component probabilities for each point in ``scan``."""
+    responsibilities, _ = _e_step(scan, means, variances, weights)
+    return responsibilities
+
+
+def mixture_fit_crossing(gaps_seconds):
+    """Estimate the log10(seconds) crossing point between two gap
+    populations, using a 2-component Gaussian mixture fit only if it
+    is favored over a 1-component fit by BIC.
+    """
     if len(gaps_seconds) < MIN_GAPS_FOR_ESTIMATE:
         return None
+
     log_gaps = np.log10(gaps_seconds).reshape(-1, 1)
-    gmm1 = GaussianMixture(n_components=1, random_state=0).fit(log_gaps)
-    gmm2 = GaussianMixture(n_components=2, random_state=0).fit(log_gaps)
-    if gmm2.bic(log_gaps) >= gmm1.bic(log_gaps):
+    n_samples = log_gaps.shape[0]
+
+    _, _, log_likelihood_1 = _fit_gmm1(log_gaps[:, 0])
+    means, variances, weights, log_likelihood_2 = _fit_gmm2(log_gaps, random_state=0)
+
+    bic1 = _bic(log_likelihood_1, 1, n_samples)
+    bic2 = _bic(log_likelihood_2, 2, n_samples)
+    if bic2 >= bic1:
         return None
-    means = np.asarray(gmm2.means_).flatten()
-    lo_idx, hi_idx = np.argsort(means)[0], np.argsort(means)[1]
+
+    order = np.argsort(means)
+    lo_idx, hi_idx = order[0], order[1]
+
     scan = np.linspace(means[lo_idx], means[hi_idx], 500).reshape(-1, 1)
-    posterior = gmm2.predict_proba(scan)
+    posterior = _predict_proba(scan, means, variances, weights)
+
     for i in range(len(scan) - 1):
         if posterior[i, lo_idx] >= 0.5 and posterior[i + 1, lo_idx] < 0.5:
             return float(10 ** scan[i, 0])
