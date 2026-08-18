@@ -168,7 +168,7 @@ class AnomalyDetector:
             int(current_date[5:7]),
             int(current_date[8:]),
             13,
-            40,
+            50,
             00,
             tzinfo=datetime.UTC,
         )
@@ -232,7 +232,7 @@ class AnomalyDetector:
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
-        self.event_analysis
+        await self.event_analysis(_now)
         self.daily_analysis = async_track_time_interval(
             self.hass, self.event_analysis, datetime.timedelta(days=1)
         )
