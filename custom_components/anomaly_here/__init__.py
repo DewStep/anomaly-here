@@ -168,10 +168,15 @@ class AnomalyDetector:
             int(current_date[5:7]),
             int(current_date[8:]),
             13,
-            15,
+            40,
             00,
             tzinfo=datetime.UTC,
         )
+        create(
+            self.hass,
+            ("Test call. current time." + str(datetime.datetime.now(tz=datetime.UTC))),
+        )
+        create(self.hass, ("Test call. analyse time." + str(evening_datetime)))
         self.analyse_start = async_track_point_in_time(
             self.hass,
             self.analysis_start,
@@ -226,12 +231,14 @@ class AnomalyDetector:
         create(self.hass, ("Test call. All listeners created"))
 
     async def analysis_start(self, _now: datetime.datetime):
+        create(self.hass, ("Test call. Analysis cycle started"))
         self.event_analysis
         self.daily_analysis = async_track_time_interval(
             self.hass, self.event_analysis, datetime.timedelta(days=1)
         )
 
     async def event_analysis(self, _now: datetime.datetime):
+        create(self.hass, ("Test call. Daily analysis started"))
         thresholds = run_merge(self.events_full)
         create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
         # Test run
