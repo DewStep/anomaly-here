@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import datetime
 import sqlite3
+import time
 from typing import TYPE_CHECKING
 
 import pandas as pd
+import sqlalchemy
 from homeassistant.components.persistent_notification import create
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.helpers import entity_registry as er
@@ -23,8 +25,9 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.loader import async_get_loaded_integration
+from sqlalchemy import Column, Integer, String, orm
 
-from .analysis import run_merge
+from .analysis import build_activations, estimate_hold_times, merge_episodes, run_merge
 from .api import AnomalyHereApiClient
 from .const import DOMAIN, LOGGER
 from .coordinator import AnomalyHereDataUpdateCoordinator
@@ -40,6 +43,21 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
 ]
+
+Base = orm.declarative_base()
+
+
+class Episodes_db(Base):
+    __tablename__ = "episodes"  # Table name
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scope_type = Column(String, nullable=False)
+    scope_value = Column(String, nullable=False)
+    start_ts = Column(Integer, nullable=False)
+    end_ts = Column(Integer, nullable=False)
+    event_count = Column(Integer, nullable=False)
+    active_duration_s = Column(Integer, nullable=False)
+    created_at = Column(Integer, nullable=False)
 
 
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
@@ -154,6 +172,11 @@ class AnomalyDetector:
     async def async_setup(self) -> None:
         """Set up the AnomalyDetector and database."""
         await self.create_listeners()
+
+        engine = sqlalchemy.create_engine("sqlite:///activity_log.db")
+        Base.metadata.create_all(engine)
+        self.session = orm.Session(bind=engine)
+
         self.activity_log = sqlite3.connect("activity_log.db", isolation_level=None)
         self.activity_log.execute(
             "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
@@ -167,8 +190,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            13,
-            50,
+            14,
+            10,
             00,
             tzinfo=datetime.UTC,
         )
@@ -232,19 +255,80 @@ class AnomalyDetector:
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
-        await self.event_analysis(_now)
+        try:
+            thresholds = run_merge(self.events_full)
+            create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
+        except Exception as e:
+            create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
+            return
+        # Test run
+        form = "%Y-%m-%d %H:%M:%S"
+        merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
+        rows, _cols = merge_thresholds.shape
+        holds = estimate_hold_times(self.events_full)
+        for entity_info in range(rows):
+            ind_thresh = merge_thresholds.iloc[entity_info]
+            if ind_thresh.iloc[0] != "HOUSE":
+                entity = ind_thresh.iloc[0]
+                s_type = "entity"
+                s_value = entity
+            else:
+                entity = None
+                s_type = "house"
+                s_value = "house"
+            activations = build_activations(self.events_full, holds, entity)
+            episodes = merge_episodes(activations, ind_thresh.iloc[1])
+            ep_rows, _ep_cols = episodes.shape
+            for i in range(ep_rows):
+                episode_date = str(episodes.at[i, "start"])[:19]
+                epoch_start = int(
+                    datetime.datetime.strptime(episode_date, form).timestamp()
+                )
+                episode_date = str(episodes.at[i, "end"])[:19]
+                epoch_end = int(
+                    datetime.datetime.strptime(episode_date, form).timestamp()
+                )
+                new_episode = Episodes_db(
+                    scope_type=s_type,
+                    scope_value=s_value,
+                    start_ts=epoch_start,
+                    end_ts=epoch_end,
+                    event_count=2,
+                    active_duration_s=2,
+                    created_at=int(time.time()),
+                )
+                self.session.add(new_episode)
+        self.session.commit()
+        data = {"time": [], "sensor": [], "value": []}
+        self.events_full = pd.DataFrame(data)
+        create(self.hass, ("Test call. Analysis cycle completed"))
+        episode_data = self.session.query(Episodes_db).all()
+        run_number = 0
+        for episode in episode_data:
+            run_number += 1
+            create(
+                self.hass,
+                (
+                    "Test call. Episode: "
+                    + str(episode.scope_type)
+                    + " "
+                    + str(episode.scope_value)
+                    + " "
+                    + str(episode.start_ts)
+                    + " "
+                    + str(episode.end_ts)
+                ),
+            )
+            if run_number > 10:
+                break
+
+        create(self.hass, ("Test call. "))
         self.daily_analysis = async_track_time_interval(
             self.hass, self.event_analysis, datetime.timedelta(days=1)
         )
 
     async def event_analysis(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Daily analysis started"))
-        thresholds = run_merge(self.events_full)
-        create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
-        # Test run
-        merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
-        for event in self.events_full:
-            create(self.hass, ("Test call. event number " + str(event)))
 
     async def alert_call(self, _now: datetime.datetime) -> None:
         """Send a persistent notification to Home Assistant."""
@@ -257,3 +341,7 @@ class AnomalyDetector:
         self.restart_check()  # Cancel the scheduled alert call
         self.daily_analysis()  # Cancel the scheduled daily analysis
         self.analyse_start()  # Cancel the scheduled analysis start
+        episode_data = self.session.query(Episodes_db).all()
+        for episode in episode_data:
+            self.session.delete(episode)
+            self.session.commit()
