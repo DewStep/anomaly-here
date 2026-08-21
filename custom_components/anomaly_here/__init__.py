@@ -190,8 +190,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            15,
-            45,
+            17,
+            20,
             00,
             tzinfo=datetime.UTC,
         )
@@ -273,7 +273,7 @@ class AnomalyDetector:
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
         try:
-            thresholds = run_merge(self.events_full)
+            thresholds = run_merge(self.events_full, self.hass)
             create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
         except Exception as e:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
@@ -282,7 +282,7 @@ class AnomalyDetector:
         form = "%Y-%m-%d %H:%M:%S"
         merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
         rows, _cols = merge_thresholds.shape
-        holds = estimate_hold_times(self.events_full)
+        holds = estimate_hold_times(self.events_full, self.hass)
         for entity_info in range(rows):
             ind_thresh = merge_thresholds.iloc[entity_info]
             if ind_thresh.iloc[0] != "HOUSE":
@@ -294,7 +294,7 @@ class AnomalyDetector:
                 s_type = "house"
                 s_value = "house"
             activations = build_activations(self.events_full, holds, entity)
-            episodes = merge_episodes(activations, ind_thresh.iloc[1])
+            episodes = merge_episodes(activations, ind_thresh.iloc[1], self.hass)
             ep_rows, _ep_cols = episodes.shape
             for i in range(ep_rows):
                 episode_date = str(episodes.at[i, "start"])[:19]

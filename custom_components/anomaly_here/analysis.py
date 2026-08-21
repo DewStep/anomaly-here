@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from homeassistant.components.persistent_notification import create
 from scipy.cluster.vq import kmeans2
 from scipy.stats import norm
 
@@ -16,30 +17,32 @@ SWEEP_SECONDS = list(range(10, 601, 10))
 MIN_GAPS_FOR_ESTIMATE = 20
 K_SENSITIVITY_MULTIPLIERS = [0.5, 1.0, 2.0]
 
-ON_VALUES = {"ON", "OPEN"}
-OFF_VALUES = {"OFF", "CLOSE"}
+ON_VALUES = {"ON", "OPEN", "on"}
+OFF_VALUES = {"OFF", "CLOSE", "off"}
 _EPS = 1e-6
-
 
 # ---------------------------------------------------------------------------
 # DATA LOADING
 # ---------------------------------------------------------------------------
 
 
-def truncate_events(events, days):
+def truncate_events(events, days, hass):
     """Restricts to the first N days from the dataset's own start."""
+    create(hass, ("Test call. truncate_events run"))
     cutoff = events["time"].min() + pd.Timedelta(days=days)
     return events[events["time"] < cutoff]
 
 
-def discover_entities(events, exclude=None):
+def discover_entities(events, hass, exclude=None):
 
+    create(hass, ("Test call. discover_entities run"))
     exclude = exclude or set()
     return sorted(s for s in events["sensor"].unique() if s not in exclude)
 
 
-def estimate_hold_times(events):
+def estimate_hold_times(events, hass):
 
+    create(hass, ("Test call. estimate_hold_times run"))
     holds = {}
     for sensor, group in events.groupby("sensor"):
         group = group.sort_values("time")
@@ -56,8 +59,9 @@ def estimate_hold_times(events):
     return holds
 
 
-def build_activations(events, holds, sensor=None):
+def build_activations(events, holds, hass, sensor=None):
     """Hold-corrected (on, off) intervals. sensor=None -> all sensors pooled (house scope)."""
+    create(hass, ("Test call. build_activations run"))
     subset = events if sensor is None else events[events["sensor"] == sensor]
     activations = []
     for s, group in subset.groupby("sensor"):
@@ -75,8 +79,9 @@ def build_activations(events, holds, sensor=None):
     return activations
 
 
-def merge_episodes(activations, gap_seconds):
+def merge_episodes(activations, gap_seconds, hass):
     """Merges activations into episodes: gap <= gap_seconds -> same episode."""
+    create(hass, ("Test call. merge_episodes run"))
     items = sorted(activations)
     gap = pd.Timedelta(seconds=gap_seconds)
     episodes, cur_start, cur_end = [], None, None
@@ -92,8 +97,9 @@ def merge_episodes(activations, gap_seconds):
     return pd.DataFrame(episodes, columns=["start", "end"])
 
 
-def raw_gaps_seconds(activations):
+def raw_gaps_seconds(activations, hass):
     """Inter-activation gaps in seconds, before merging."""
+    create(hass, ("Test call. raw_gaps_seconds run"))
     items = sorted(activations)
     return np.array(
         [
@@ -107,7 +113,7 @@ def raw_gaps_seconds(activations):
 # ---------------------------------------------------------------------------
 # THRESHOLD ESTIMATION: mixture-fit, knee, stability
 # ---------------------------------------------------------------------------
-def _fit_gmm1(x):
+def _fit_gmm1(x, hass):
     """Closed-form fit of a single 1-D Gaussian.
 
     Equivalent to ``GaussianMixture(n_components=1).fit``.
@@ -116,17 +122,19 @@ def _fit_gmm1(x):
     -------
     mean, var, log_likelihood
     """
+    create(hass, ("Test call. _fit_gmm1 run"))
     mean = float(np.mean(x))
     var = max(float(np.var(x)), _EPS)  # biased (MLE) variance
     log_likelihood = float(np.sum(norm.logpdf(x, loc=mean, scale=np.sqrt(var))))
     return mean, var, log_likelihood
 
 
-def _e_step(x, means, variances, weights):
+def _e_step(x, means, variances, weights, hass):
     """Compute responsibilities and total log-likelihood.
 
     Uses the log-sum-exp trick for numerical stability.
     """
+    create(hass, ("Test call. _e_step run"))
     n_components = len(means)
     log_probs = np.empty((x.shape[0], n_components))
     for k in range(n_components):
@@ -142,8 +150,9 @@ def _e_step(x, means, variances, weights):
     return responsibilities, log_likelihood
 
 
-def _m_step(x, responsibilities):
+def _m_step(x, responsibilities, hass):
     """Update means, variances, and weights given responsibilities."""
+    create(hass, ("Test call. _m_step run"))
     n_samples = x.shape[0]
     weight_sums = responsibilities.sum(axis=0)
     weights = weight_sums / n_samples
@@ -158,10 +167,11 @@ def _m_step(x, responsibilities):
     return means, variances, weights
 
 
-def _init_params(x, n_components, random_state):
+def _init_params(x, n_components, random_state, hass):
     """Initialize means/variances/weights via k-means (mirrors
     scikit-learn's default ``init_params="kmeans"``).
     """
+    create(hass, ("Test call. _init_params run"))
     rng = np.random.RandomState(random_state)
     rng = rng.randint(0, np.iinfo(np.int32).max)
     centroids, labels = kmeans2(x, n_components, minit="++", rng=rng)
@@ -179,7 +189,7 @@ def _init_params(x, n_components, random_state):
     return means, variances, weights
 
 
-def _fit_gmm2(x, random_state=0, tol=1e-3, max_iter=100):
+def _fit_gmm2(x, hass, random_state=0, tol=1e-3, max_iter=100):
     """Fit a 2-component 1-D Gaussian mixture via EM.
 
     Equivalent to ``GaussianMixture(n_components=2).fit``.
@@ -188,51 +198,59 @@ def _fit_gmm2(x, random_state=0, tol=1e-3, max_iter=100):
     -------
     means, variances, weights, log_likelihood
     """
-    means, variances, weights = _init_params(x, 2, random_state)
+    create(hass, ("Test call. _fit_gmm2 run"))
+    means, variances, weights = _init_params(x, 2, random_state, hass)
     prev_log_likelihood = -np.inf
 
     for _ in range(max_iter):
-        responsibilities, log_likelihood = _e_step(x, means, variances, weights)
-        means, variances, weights = _m_step(x, responsibilities)
+        responsibilities, log_likelihood = _e_step(x, means, variances, weights, hass)
+        means, variances, weights = _m_step(x, responsibilities, hass)
         if abs(log_likelihood - prev_log_likelihood) < tol:
             break
         prev_log_likelihood = log_likelihood
 
-    _, log_likelihood = _e_step(x, means, variances, weights)
+    _, log_likelihood = _e_step(x, means, variances, weights, hass)
     return means, variances, weights, log_likelihood
 
 
-def _bic(log_likelihood, n_components, n_samples):
+def _bic(log_likelihood, n_components, n_samples, hass):
     """Bayesian Information Criterion, matching
     ``GaussianMixture.bic`` for ``covariance_type="full"`` on 1-D
     data (``n_params = 3 * n_components - 1``).
     """
+    create(hass, ("Test call. _bic run"))
     n_params = 3 * n_components - 1
     return -2.0 * log_likelihood + n_params * np.log(n_samples)
 
 
-def _predict_proba(scan, means, variances, weights):
+def _predict_proba(scan, means, variances, weights, hass):
     """Posterior component probabilities for each point in ``scan``."""
-    responsibilities, _ = _e_step(scan, means, variances, weights)
+    create(hass, ("Test call. _predict_proba run"))
+    responsibilities, _ = _e_step(scan, means, variances, weights, hass)
     return responsibilities
 
 
-def mixture_fit_crossing(gaps_seconds):
+def mixture_fit_crossing(gaps_seconds, hass):
     """Estimate the log10(seconds) crossing point between two gap
     populations, using a 2-component Gaussian mixture fit only if it
     is favored over a 1-component fit by BIC.
     """
+    create(hass, ("Test call. mixture_fit_crossing run"))
     if len(gaps_seconds) < MIN_GAPS_FOR_ESTIMATE:
         return None
 
     log_gaps = np.log10(gaps_seconds).reshape(-1, 1)
     n_samples = log_gaps.shape[0]
 
-    _, _, log_likelihood_1 = _fit_gmm1(log_gaps[:, 0])
-    means, variances, weights, log_likelihood_2 = _fit_gmm2(log_gaps, random_state=0)
+    _, _, log_likelihood_1 = _fit_gmm1(log_gaps[:, 0], hass)
+    means, variances, weights, log_likelihood_2 = _fit_gmm2(
+        log_gaps,
+        hass,
+        random_state=0,
+    )
 
-    bic1 = _bic(log_likelihood_1, 1, n_samples)
-    bic2 = _bic(log_likelihood_2, 2, n_samples)
+    bic1 = _bic(log_likelihood_1, 1, n_samples, hass)
+    bic2 = _bic(log_likelihood_2, 2, n_samples, hass)
     if bic2 >= bic1:
         return None
 
@@ -240,7 +258,7 @@ def mixture_fit_crossing(gaps_seconds):
     lo_idx, hi_idx = order[0], order[1]
 
     scan = np.linspace(means[lo_idx], means[hi_idx], 500).reshape(-1, 1)
-    posterior = _predict_proba(scan, means, variances, weights)
+    posterior = _predict_proba(scan, means, variances, weights, hass)
 
     for i in range(len(scan) - 1):
         if posterior[i, lo_idx] >= 0.5 and posterior[i + 1, lo_idx] < 0.5:
@@ -248,16 +266,18 @@ def mixture_fit_crossing(gaps_seconds):
     return None
 
 
-def episodes_per_day_sweep(activations, sweep_seconds):
+def episodes_per_day_sweep(activations, sweep_seconds, hass):
+    create(hass, ("Test call. episodes_per_day_sweep run"))
     if not activations:
         return np.array([]), np.array([])
     n_days = max(len({t[0].date() for t in activations}), 1)
-    counts = [len(merge_episodes(activations, g)) / n_days for g in sweep_seconds]
+    counts = [len(merge_episodes(activations, g, hass)) / n_days for g in sweep_seconds]
     return np.array(sweep_seconds, dtype=float), np.array(counts)
 
 
-def find_knee(x, y):
+def find_knee(x, y, hass):
     """Kneedle-style elbow: max perpendicular distance from the line through the endpoints."""
+    create(hass, ("Test call. find_knee run"))
     if len(x) < 3:
         return None
     x_n = (x - x.min()) / (x.max() - x.min() + 1e-9)
@@ -270,8 +290,8 @@ def find_knee(x, y):
     return float(x[int(np.argmax(dist))])
 
 
-def stability_plateau(x, y, tolerance_frac=0.05):
-
+def stability_plateau(x, y, hass, tolerance_frac=0.05):
+    create(hass, ("Test call. stability_plateau run"))
     if len(x) < 3:
         return None
     best_len, best_range, i = 0, None, 0
@@ -293,9 +313,9 @@ def stability_plateau(x, y, tolerance_frac=0.05):
     return float((x[lo] + x[hi]) / 2)
 
 
-def estimate_scope_threshold(activations, sweep_seconds=SWEEP_SECONDS):
-
-    gaps = raw_gaps_seconds(activations)
+def estimate_scope_threshold(activations, hass, sweep_seconds=SWEEP_SECONDS):
+    create(hass, ("Test call. estimate_scope_threshold run"))
+    gaps = raw_gaps_seconds(activations, hass)
     n_gaps = len(gaps)
     if n_gaps < MIN_GAPS_FOR_ESTIMATE:
         return {
@@ -305,10 +325,10 @@ def estimate_scope_threshold(activations, sweep_seconds=SWEEP_SECONDS):
             "stability_mid": None,
             "raw_estimate": None,
         }
-    mixture_crossing = mixture_fit_crossing(gaps)
-    x, y = episodes_per_day_sweep(activations, sweep_seconds)
-    knee = find_knee(x, y)
-    stability_mid = stability_plateau(x, y)
+    mixture_crossing = mixture_fit_crossing(gaps, hass)
+    x, y = episodes_per_day_sweep(activations, sweep_seconds, hass)
+    knee = find_knee(x, y, hass)
+    stability_mid = stability_plateau(x, y, hass)
     raw_estimate = (
         knee
         if knee is not None
@@ -326,18 +346,20 @@ def estimate_scope_threshold(activations, sweep_seconds=SWEEP_SECONDS):
 # ---------------------------------------------------------------------------
 # HIERARCHICAL POOLING
 # ---------------------------------------------------------------------------
-def pool_toward_house(n, raw_estimate, house_G, k):
+def pool_toward_house(n, raw_estimate, house_G, k, hass):
     """w = n/(n+k). Returns (final_G, weight)."""
+    create(hass, ("Test call. pool_toward_house run"))
     if raw_estimate is None:
         return house_G, 0.0
     w = n / (n + k)
     return w * raw_estimate + (1 - w) * house_G, w
 
 
-def choose_k(entity_results):
+def choose_k(entity_results, hass):
     """K = the gap-count of a modestly-used entity (lower-third by volume)
     at the current learning window — entities busier than 'typical modest'
     are trusted close to fully; sparser ones lean on the house baseline."""
+    create(hass, ("Test call. choose_k run"))
     counts = sorted(r["n_gaps"] for r in entity_results.values())
     return counts[len(counts) // 3]
 
@@ -347,19 +369,21 @@ def choose_k(entity_results):
 # ---------------------------------------------------------------------------
 def run_merge(
     events_full,
+    hass,
     entities=None,
     learning_window_days=LEARNING_WINDOW_DAYS,
     exclude_sensors=EXCLUDE_SENSORS,
 ):
-
     if entities is None:
-        entities = discover_entities(events_full, exclude=exclude_sensors)
+        entities = discover_entities(events_full, hass, exclude=exclude_sensors)
         print(f"Discovered {len(entities)} entities: {entities}")
 
-    events = truncate_events(events_full, learning_window_days)
-    holds = estimate_hold_times(events)
+    events = truncate_events(events_full, learning_window_days, hass)
+    holds = estimate_hold_times(events, hass)
 
-    house_result = estimate_scope_threshold(build_activations(events, holds))
+    house_result = estimate_scope_threshold(
+        build_activations(events, holds, hass), hass
+    )
     house_G = house_result["raw_estimate"]
     if house_G is None:
         raise SystemExit(
@@ -368,10 +392,12 @@ def run_merge(
         )
 
     entity_results = {
-        e: estimate_scope_threshold(build_activations(events, holds, sensor=e))
+        e: estimate_scope_threshold(
+            build_activations(events, holds, hass, sensor=e), hass
+        )
         for e in entities
     }
-    k = choose_k(entity_results)
+    k = choose_k(entity_results, hass)
 
     rows = [
         {
@@ -386,10 +412,10 @@ def run_merge(
     ]
     for entity, res in entity_results.items():
         n, raw = res["n_gaps"], res["raw_estimate"]
-        final_G, w = pool_toward_house(n, raw, house_G, k)
+        final_G, w = pool_toward_house(n, raw, house_G, k, hass)
 
         sensitivity_Gs = [
-            pool_toward_house(n, raw, house_G, k * m)[0]
+            pool_toward_house(n, raw, house_G, k * m, hass)[0]
             for m in K_SENSITIVITY_MULTIPLIERS
         ]
         sensitivity_range = max(sensitivity_Gs) - min(sensitivity_Gs)
