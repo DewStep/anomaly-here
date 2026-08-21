@@ -190,8 +190,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            14,
-            10,
+            15,
+            45,
             00,
             tzinfo=datetime.UTC,
         )
@@ -226,23 +226,22 @@ class AnomalyDetector:
                     + str(type(pd.to_datetime(new_state.last_changed, errors="coerce")))
                 ),
             )
-            create(
-                self.hass,
-                (
-                    "Test call, last_changed of type "
-                    + str(type(new_state.last_changed))
-                ),
-            )
-            create(
-                self.hass,
-                ("Test call, last changed value: " + str(new_state.last_changed)),
-            )
-            test_time = datetime.datetime.now(tz=datetime.UTC)
-            create(self.hass, ("Test call, current time format: " + str(test_time)))
-            create(self.hass, ("Test call, current time type: " + str(type(test_time))))
+            if new_state.last_changed is not None:
+                write_time = pd.to_datetime(new_state.last_changed, errors="coerce")
+                if write_time is pd.NaT:
+                    write_time = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC))
+                    create(
+                        self.hass,
+                        ("test call, last_changed is None, using current time"),
+                    )
+            else:
+                write_time = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC))
+                create(
+                    self.hass, ("test call, last_changed is None, using current time")
+                )
             new_row = pd.DataFrame(
                 {
-                    "time": [pd.to_datetime(new_state.last_changed, errors="coerce")],
+                    "time": [write_time],
                     "sensor": [_event.data["entity_id"]],
                     "value": [new_state.state],
                 }
