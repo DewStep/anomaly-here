@@ -219,6 +219,27 @@ class AnomalyDetector:
         self.restart_check()
         new_state = _event.data["new_state"]
         if new_state is not None:
+            create(
+                self.hass,
+                (
+                    "test call, wrong type is "
+                    + str(type(pd.to_datetime(new_state.last_changed, errors="coerce")))
+                ),
+            )
+            create(
+                self.hass,
+                (
+                    "Test call, last_changed of type "
+                    + str(type(new_state.last_changed))
+                ),
+            )
+            create(
+                self.hass,
+                ("Test call, last changed value: " + str(new_state.last_changed)),
+            )
+            test_time = datetime.datetime.now(tz=datetime.UTC)
+            create(self.hass, ("Test call, current time format: " + str(test_time)))
+            create(self.hass, ("Test call, current time type: " + str(type(test_time))))
             new_row = pd.DataFrame(
                 {
                     "time": [pd.to_datetime(new_state.last_changed, errors="coerce")],
@@ -235,14 +256,12 @@ class AnomalyDetector:
     async def create_listeners(self) -> None:
         """Create listeners for all binary sensors in self.sensors."""
         self.EndList = []
-        create(self.hass, ("Test call. Setup started."))
         for entity_class in self.sensors:
             try:
                 for entity in self.sensors[entity_class][1]:
                     end_listener = async_track_state_change_event(
                         self.hass, entity, self.activity_noticed
                     )
-                    create(self.hass, ("Test call. Listener Created for " + entity))
                     self.EndList.append(end_listener)
             except IndexError:
                 create(
@@ -251,7 +270,6 @@ class AnomalyDetector:
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
         )
-        create(self.hass, ("Test call. All listeners created"))
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
