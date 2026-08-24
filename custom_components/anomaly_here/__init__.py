@@ -25,7 +25,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.loader import async_get_loaded_integration
-from sqlalchemy import Column, Integer, String, orm
+from sqlalchemy import Column, Integer, Nullable, String, orm
 
 from .analysis import build_activations, estimate_hold_times, merge_episodes, run_merge
 from .api import AnomalyHereApiClient
@@ -58,6 +58,15 @@ class Episodes_db(Base):
     event_count = Column(Integer, nullable=False)
     active_duration_s = Column(Integer, nullable=False)
     created_at = Column(Integer, nullable=False)
+
+
+class EventsDB(Base):
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    time = Column(Integer, nullable=False)
+    sensor = Column(String, nullable=False)
+    value = Column(String, nullable=False)
 
 
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
@@ -190,8 +199,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            14,
-            47,
+            15,
+            44,
             00,
             tzinfo=datetime.UTC,
         )
@@ -239,21 +248,15 @@ class AnomalyDetector:
                 create(
                     self.hass, ("test call, last_changed is None, using current time")
                 )
-            data = {
-                "time": [write_time],
-                "sensor": [_event.data["entity_id"]],
-                "value": [new_state.state],
-            }
-            rows, _cols = self.events_full.shape
-            if rows == 0:
-                self.events_full = pd.DataFrame(data)
-                create(self.hass, ("Test call, events DF started"))
-            else:
-                new_row = pd.DataFrame(data)
-                self.events_full = pd.concat(
-                    [self.events_full, new_row], ignore_index=True
-                )
-                create(self.hass, ("Test call, events DF updated"))
+
+            new_event = EventsDB(
+                time=write_time,
+                sensor=_event.data["entity_id"],
+                value=new_state.state,
+            )
+            self.session.add(new_event)
+            self.session.commit()
+            create(self.hass, ("Test call, events DB updated"))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
@@ -279,17 +282,40 @@ class AnomalyDetector:
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
+
+        event_data = self.session.query(EventsDB).all()
+        for event in event_data:
+            data = {
+                "time": [event.time],
+                "sensor": [event.sensor],
+                "value": [event.value],
+            }
+
+            rows, _cols = self.events_full.shape
+            if rows == 0:
+                self.events_full = pd.DataFrame(data)
+                create(self.hass, ("Test call, events DF started"))
+            else:
+                new_row = pd.DataFrame(data)
+                self.events_full = pd.concat(
+                    [self.events_full, new_row], ignore_index=True
+                )
+                create(self.hass, ("Test call, events DF updated"))
         try:
             thresholds = run_merge(self.events_full, self.hass)
             create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
         except Exception as e:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
             return
+        event_data = self.session.query(EventsDB).all()
+        for event in event_data:
+            self.session.delete(event)
+        self.session.commit()
         # Test run
         form = "%Y-%m-%d %H:%M:%S"
         merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
         rows, _cols = merge_thresholds.shape
-        holds = estimate_hold_times(self.events_full, self.hass)
+        holds = estimate_hold_times(self.events_full)
         for entity_info in range(rows):
             ind_thresh = merge_thresholds.iloc[entity_info]
             if ind_thresh.iloc[0] != "HOUSE":
@@ -301,7 +327,7 @@ class AnomalyDetector:
                 s_type = "house"
                 s_value = "house"
             activations = build_activations(self.events_full, holds, entity)
-            episodes = merge_episodes(activations, ind_thresh.iloc[1], self.hass)
+            episodes = merge_episodes(activations, ind_thresh.iloc[1])
             ep_rows, _ep_cols = episodes.shape
             for i in range(ep_rows):
                 episode_date = str(episodes.at[i, "start"])[:19]
@@ -368,4 +394,4 @@ class AnomalyDetector:
         episode_data = self.session.query(Episodes_db).all()
         for episode in episode_data:
             self.session.delete(episode)
-            self.session.commit()
+        self.session.commit()
