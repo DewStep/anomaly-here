@@ -44,6 +44,7 @@ def truncate_events(events, days, hass):
     # ERROR FOUND HERE, NOTE TO FUTURE SELF, THIS IS WHERE THE ERROR IS. I THINK
     # cutoff is NaTType
     # issue is with events[time].min
+    # events has no data somehow. The events aren't actually being written
     return events[events["time"] < cutoff]
 
 

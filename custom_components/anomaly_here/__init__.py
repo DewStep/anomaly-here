@@ -190,8 +190,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            13,
-            20,
+            14,
+            47,
             00,
             tzinfo=datetime.UTC,
         )
@@ -239,14 +239,21 @@ class AnomalyDetector:
                 create(
                     self.hass, ("test call, last_changed is None, using current time")
                 )
-            new_row = pd.DataFrame(
-                {
-                    "time": [write_time],
-                    "sensor": [_event.data["entity_id"]],
-                    "value": [new_state.state],
-                }
-            )
-            self.events_full = pd.concat([self.events_full, new_row], ignore_index=True)
+            data = {
+                "time": [write_time],
+                "sensor": [_event.data["entity_id"]],
+                "value": [new_state.state],
+            }
+            rows, _cols = self.events_full.shape
+            if rows == 0:
+                self.events_full = pd.DataFrame(data)
+                create(self.hass, ("Test call, events DF started"))
+            else:
+                new_row = pd.DataFrame(data)
+                self.events_full = pd.concat(
+                    [self.events_full, new_row], ignore_index=True
+                )
+                create(self.hass, ("Test call, events DF updated"))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
