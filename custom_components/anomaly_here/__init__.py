@@ -199,8 +199,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            12,
-            53,
+            13,
+            25,
             00,
             tzinfo=datetime.UTC,
         )
@@ -266,9 +266,13 @@ class AnomalyDetector:
         event_data = self.session.query(EventsDB).all()
         for event in event_data:
             create(self.hass, ("event.unix_time of type" + str(type(event.unix_time))))
-            if type(event.unix_time) == type(0):
+            if type(event.unix_time) is int:
                 data = {
-                    "time": [time.strftime(form, time.gmtime(event.unix_time))],
+                    "time": [
+                        datetime.datetime.fromtimestamp(
+                            event.unix_time, tz=datetime.UTC
+                        )
+                    ],
                     "sensor": [event.sensor],
                     "value": [event.value],
                 }
