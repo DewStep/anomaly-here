@@ -30,21 +30,6 @@ def truncate_events(events, days, hass):
     """Restricts to the first N days from the dataset's own start."""
     create(hass, ("Test call. truncate_events run"))
     cutoff = events["time"].min() + pd.Timedelta(days=days)
-    # create(hass, ("Test Call 1: cutoff = " + str(cutoff)))
-    # create(hass, ("Test Call 2: cutoff type = " + str(type(cutoff))))
-    # create(hass, ("Test Call 3: events min = " + str(events["time"].min())))
-    # create(hass, ("Test Call 4: events min type = " + str(type(events["time"].min()))))
-    rows, cols = events.shape
-    create(hass, ("Test Call: shape is: " + str(rows) + str(cols)))
-    for i in range(rows):
-        create(
-            hass,
-            ("Test Call: event number " + str(i) + " is " + str(events["time"][i])),
-        )
-    # ERROR FOUND HERE, NOTE TO FUTURE SELF, THIS IS WHERE THE ERROR IS. I THINK
-    # cutoff is NaTType
-    # issue is with events[time].min
-    # events has no data somehow. The events aren't actually being written
     return events[events["time"] < cutoff]
 
 

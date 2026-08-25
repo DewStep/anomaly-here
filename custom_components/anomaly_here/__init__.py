@@ -199,8 +199,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            13,
-            25,
+            15,
+            40,
             00,
             tzinfo=datetime.UTC,
         )
@@ -262,12 +262,12 @@ class AnomalyDetector:
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
-        form = "%Y-%m-%d %H:%M:%S"
         event_data = self.session.query(EventsDB).all()
+        events_list = []
         for event in event_data:
             create(self.hass, ("event.unix_time of type" + str(type(event.unix_time))))
             if type(event.unix_time) is int:
-                data = {
+                row_data = {
                     "time": [
                         datetime.datetime.fromtimestamp(
                             event.unix_time, tz=datetime.UTC
@@ -276,24 +276,20 @@ class AnomalyDetector:
                     "sensor": [event.sensor],
                     "value": [event.value],
                 }
+                events_list.append(row_data)
             else:
                 create(self.hass, ("Can't use event like that"))
-            rows, _cols = self.events_full.shape
-            if rows == 0:
-                self.events_full = pd.DataFrame(data)
-                create(self.hass, ("Test call, events DF started"))
-            else:
-                new_row = pd.DataFrame(data)
-                self.events_full = pd.concat(
-                    [self.events_full, new_row], ignore_index=True
-                )
-                create(self.hass, ("Test call, events DF updated"))
+        self.events_full = pd.DataFrame(events_list)
+
         try:
-            thresholds = run_merge(self.events_full, self.hass)
+            thresholds = await self.hass.async_add_executor_job(
+                run_merge, self.events_full, self.hass
+            )
             create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
         except Exception as e:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
             return
+
         event_data = self.session.query(EventsDB).all()
         for event in event_data:
             self.session.delete(event)
