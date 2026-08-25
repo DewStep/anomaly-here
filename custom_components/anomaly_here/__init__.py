@@ -64,7 +64,7 @@ class EventsDB(Base):
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    time = Column(Integer, nullable=False)
+    unix_time = Column(Integer, nullable=False)
     sensor = Column(String, nullable=False)
     value = Column(String, nullable=False)
 
@@ -186,12 +186,12 @@ class AnomalyDetector:
         Base.metadata.create_all(engine)
         self.session = orm.Session(bind=engine)
 
-        self.activity_log = sqlite3.connect("activity_log.db", isolation_level=None)
-        self.activity_log.execute(
-            "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
-        )
-        self.activity_log.execute("DELETE FROM activity WHERE 1")
-        create(self.hass, ("Test call. Database created."))
+        # self.activity_log = sqlite3.connect("activity_log.db", isolation_level=None)
+        # self.activity_log.execute(
+        #    "CREATE TABLE IF NOT EXISTS activity (timestamp TEXT,event TEXT)"
+        # )
+        # self.activity_log.execute("DELETE FROM activity WHERE 1")
+        # create(self.hass, ("Test call. Database created."))
         data = {"time": [], "sensor": [], "value": []}
         self.events_full = pd.DataFrame(data)
         current_date = str(datetime.datetime.now(tz=datetime.UTC).date())
@@ -199,8 +199,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            15,
-            44,
+            12,
+            53,
             00,
             tzinfo=datetime.UTC,
         )
@@ -228,29 +228,9 @@ class AnomalyDetector:
         self.restart_check()
         new_state = _event.data["new_state"]
         if new_state is not None:
-            create(
-                self.hass,
-                (
-                    "test call, wrong type is "
-                    + str(type(pd.to_datetime(new_state.last_changed, errors="coerce")))
-                ),
-            )
-            if new_state.last_changed is not None:
-                write_time = pd.to_datetime(new_state.last_changed, errors="coerce")
-                if write_time is pd.NaT:
-                    write_time = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC))
-                    create(
-                        self.hass,
-                        ("test call, last_changed is None, using current time"),
-                    )
-            else:
-                write_time = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC))
-                create(
-                    self.hass, ("test call, last_changed is None, using current time")
-                )
-
+            write_time = int(new_state.last_changed.timestamp())
             new_event = EventsDB(
-                time=write_time,
+                unix_time=write_time,
                 sensor=_event.data["entity_id"],
                 value=new_state.state,
             )
@@ -282,15 +262,18 @@ class AnomalyDetector:
 
     async def analysis_start(self, _now: datetime.datetime):
         create(self.hass, ("Test call. Analysis cycle started"))
-
+        form = "%Y-%m-%d %H:%M:%S"
         event_data = self.session.query(EventsDB).all()
         for event in event_data:
-            data = {
-                "time": [event.time],
-                "sensor": [event.sensor],
-                "value": [event.value],
-            }
-
+            create(self.hass, ("event.unix_time of type" + str(type(event.unix_time))))
+            if type(event.unix_time) == type(0):
+                data = {
+                    "time": [time.strftime(form, time.gmtime(event.unix_time))],
+                    "sensor": [event.sensor],
+                    "value": [event.value],
+                }
+            else:
+                create(self.hass, ("Can't use event like that"))
             rows, _cols = self.events_full.shape
             if rows == 0:
                 self.events_full = pd.DataFrame(data)
