@@ -197,8 +197,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            13,
-            45,
+            14,
+            00,
             00,
             tzinfo=datetime.UTC,
         )
@@ -272,19 +272,20 @@ class AnomalyDetector:
                 }
                 events_list.append(row_data)
             else:
-                create(self.hass, ("Can't use event like that"))
+                create(self.hass, ("Event time in wrong format"))
         self.events_full = pd.DataFrame(events_list)
-        create(self.hass, "self.events_full: " + str(type(self.events_full)))
         try:
             thresholds = await self.hass.async_add_executor_job(
                 run_merge, self.events_full, self.hass
             )
             create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
         except ValueError as e:
+            create(self.hass, ("Test call. ValueError in analysis_start: " + str(e)))
             if e.args[0] == 1:
                 self.restart_analysis = async_call_later(
                     self.hass, datetime.timedelta(days=1), self.analysis_start
                 )
+                return
         except Exception as e:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
             return
@@ -298,6 +299,7 @@ class AnomalyDetector:
         merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
         rows, _cols = merge_thresholds.shape
         holds = estimate_hold_times(self.events_full)
+        create(self.hass, "Test call, holds calculated")
         for entity_info in range(rows):
             ind_thresh = merge_thresholds.iloc[entity_info]
             if ind_thresh.iloc[0] != "HOUSE":
