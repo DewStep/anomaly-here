@@ -197,8 +197,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            14,
-            00,
+            15,
+            15,
             00,
             tzinfo=datetime.UTC,
         )
@@ -268,7 +268,7 @@ class AnomalyDetector:
                         event.unix_time, tz=datetime.UTC
                     ),
                     "sensor": event.sensor,
-                    "value": event.value,
+                    "value": event.value.upper(),
                 }
                 events_list.append(row_data)
             else:
@@ -290,10 +290,10 @@ class AnomalyDetector:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
             return
 
-        event_data = self.session.query(EventsDB).all()
-        for event in event_data:
-            self.session.delete(event)
-        self.session.commit()
+        # event_data = self.session.query(EventsDB).all()
+        # for event in event_data:
+        #    self.session.delete(event)
+        # self.session.commit()
         # Test run
         form = "%Y-%m-%d %H:%M:%S"
         merge_thresholds = thresholds.loc[:, ["entity", "final_G_s"]]
