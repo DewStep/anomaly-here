@@ -364,9 +364,11 @@ def run_merge(
     house_result = estimate_scope_threshold(build_activations(events, holds))
     house_G = house_result["raw_estimate"]
     if house_G is None:
-        raise SystemExit(
-            f"House-scope estimate failed at {learning_window_days} days — "
-            f"not enough data yet. Try a longer window."
+        restart_analysis = 1
+        raise ValueError(
+            restart_analysis,
+            "House-scope estimate failed at " + str(learning_window_days) + " days — ",
+            "not enough data yet. Try a longer window.",
         )
 
     entity_results = {

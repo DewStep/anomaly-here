@@ -197,8 +197,8 @@ class AnomalyDetector:
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            11,
-            50,
+            13,
+            45,
             00,
             tzinfo=datetime.UTC,
         )
@@ -280,6 +280,11 @@ class AnomalyDetector:
                 run_merge, self.events_full, self.hass
             )
             create(self.hass, ("Test call. episodes of type " + str(type(thresholds))))
+        except ValueError as e:
+            if e.args[0] == 1:
+                self.restart_analysis = async_call_later(
+                    self.hass, datetime.timedelta(days=1), self.analysis_start
+                )
         except Exception as e:
             create(self.hass, ("Test call. Error in analysis_start: " + str(e)))
             return
