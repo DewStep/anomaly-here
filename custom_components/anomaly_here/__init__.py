@@ -192,15 +192,13 @@ class AnomalyDetector:
         # )
         # self.activity_log.execute("DELETE FROM activity WHERE 1")
         # create(self.hass, ("Test call. Database created."))
-        data = {"time": [], "sensor": [], "value": []}
-        self.events_full = pd.DataFrame(data)
         current_date = str(datetime.datetime.now(tz=datetime.UTC).date())
         evening_datetime = datetime.datetime(
             int(current_date[:4]),
             int(current_date[5:7]),
             int(current_date[8:]),
-            15,
-            40,
+            11,
+            30,
             00,
             tzinfo=datetime.UTC,
         )
@@ -236,7 +234,6 @@ class AnomalyDetector:
             )
             self.session.add(new_event)
             self.session.commit()
-            create(self.hass, ("Test call, events DB updated"))
         # change this once the code to figure it out is written
         self.restart_check = async_call_later(
             self.hass, datetime.timedelta(minutes=5), self.alert_call
@@ -265,22 +262,19 @@ class AnomalyDetector:
         event_data = self.session.query(EventsDB).all()
         events_list = []
         for event in event_data:
-            create(self.hass, ("event.unix_time of type" + str(type(event.unix_time))))
             if type(event.unix_time) is int:
                 row_data = {
-                    "time": [
-                        datetime.datetime.fromtimestamp(
-                            event.unix_time, tz=datetime.UTC
-                        )
-                    ],
-                    "sensor": [event.sensor],
-                    "value": [event.value],
+                    "time": datetime.datetime.fromtimestamp(
+                        event.unix_time, tz=datetime.UTC
+                    ),
+                    "sensor": event.sensor,
+                    "value": event.value,
                 }
                 events_list.append(row_data)
             else:
                 create(self.hass, ("Can't use event like that"))
         self.events_full = pd.DataFrame(events_list)
-
+        create(self.hass, "self.events_full: " + str(type(self.events_full)))
         try:
             thresholds = await self.hass.async_add_executor_job(
                 run_merge, self.events_full, self.hass
