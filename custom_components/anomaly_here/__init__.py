@@ -198,7 +198,7 @@ class AnomalyDetector:
             int(current_date[5:7]),
             int(current_date[8:]),
             11,
-            30,
+            40,
             00,
             tzinfo=datetime.UTC,
         )
